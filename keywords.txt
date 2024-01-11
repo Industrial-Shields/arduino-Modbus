@@ -1,37 +1,51 @@
 # TYPES (KEYWORD1)
-AnalogFilter	KEYWORD1
-Filter	KEYWORD1
-OffDelayTimer	KEYWORD1
-OnDelayTimer	KEYWORD1
-PulseTimer	KEYWORD1
-SimplePacket	KEYWORD1
-SimpleComm	KEYWORD1
-Timer	KEYWORD1
+ModbusRTUMaster	KEYWORD1
+ModbusRTUSlave	KEYWORD1
+ModbusTCPMaster	KEYWORD1
+ModbusTCPSlave	KEYWORD1
+
 
 # FUNCTIONS (KEYWORD2)
-clear	KEYWORD2
-getBool	KEYWORD2
-getBuffer	KEYWORD2
-getChar	KEYWORD2
-getDataLength	KEYWORD2
-getDestination	KEYWORD2
-getDouble	KEYWORD2
-getInt	KEYWORD2
-getLong	KEYWORD2
-getSource	KEYWORD2
-getString	KEYWORD2
-getUChar	KEYWORD2
-getUInt	KEYWORD2
-getULong	KEYWORD2
-getType	KEYWORD2
-receive	KEYWORD2
-setData	KEYWORD2
-setDestination	KEYWORD2
-setSource	KEYWORD2
-setType	KEYWORD2
-send	KEYWORD2
-startTrain	KEYWORD2
-stopTrain	KEYWORD2
-update	KEYWORD2
+## -
+begin	KEYWORD2
+getExceptionMessage	KEYWORD2
+setTimeout		KEYWORD2
+hasException		KEYWORD2
+getException		KEYWORD2
+clearException		KEYWORD2
+setException		KEYWORD2
+getState		KEYWORD2
+setState		KEYWORD2
+hasError		KEYWORD2
+getErrorCode		KEYWORD2
+getSlave		KEYWORD2
+getFC		KEYWORD2
+isCoilSet		KEYWORD2
+isDiscreteInputSet		KEYWORD2
+isDiscreteSet		KEYWORD2
+getRegister		KEYWORD2
+
+readCoils		KEYWORD2
+readDiscreteInputs	KEYWORD2
+readHoldingRegisters	KEYWORD2
+readInputRegisters	KEYWORD2
+writeSingleCoil		KEYWORD2
+writeSingleRegister	KEYWORD2
+writeMultipleCoils	KEYWORD2
+writeMultipleRegisters	KEYWORD2
+
+## -Master
+isIdle		KEYWORD2
+isWaitingResponse		KEYWORD2
+available		KEYWORD2
+
+## -Slave
+update		KEYWORD2
+getSlaveAddress		KEYWORD2
+setCoils	KEYWORD2
+setDiscreteInputs	KEYWORD2
+setHoldingRegisters	KEYWORD2
+setInputRegisters	KEYWORD2
+
 
 # CONSTANTS (LITERAL1)
