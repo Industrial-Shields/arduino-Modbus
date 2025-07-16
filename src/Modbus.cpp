@@ -17,6 +17,12 @@ ModbusFrame::ModbusFrame(uint8_t slave, uint8_t *pdu) {
 	_pdu = pdu;
 }
 
+const char STR_ILLEGAL_FUNCTION_ERROR[] = "illegal function";
+const char STR_ILLEGAL_DATA_ADDRESS_ERROR[] = "illegal data address";
+const char STR_ILLEGAL_DATA_VALUE_ERROR[] = "illegal data value";
+const char STR_SERVER_DEVICE_FAILURE[] = "server device failure";
+const char STR_UNKNOWN_RESPONSE_ERROR[] = "unknown error";
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ModbusResponse::ModbusResponse(uint8_t slave, uint8_t *pdu) : ModbusFrame(slave, pdu) {
 

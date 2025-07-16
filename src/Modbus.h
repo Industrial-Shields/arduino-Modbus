@@ -142,6 +142,12 @@ class ModbusFrame {
 		uint8_t _slave;
 };
 
+extern const char STR_ILLEGAL_FUNCTION_ERROR[];
+extern const char STR_ILLEGAL_DATA_ADDRESS_ERROR[];
+extern const char STR_ILLEGAL_DATA_VALUE_ERROR[];
+extern const char STR_SERVER_DEVICE_FAILURE[];
+extern const char STR_UNKNOWN_RESPONSE_ERROR[];
+
 class ModbusResponse : public ModbusFrame {
 	public:
 		explicit ModbusResponse(uint8_t slave, uint8_t *pdu = nullptr);
@@ -153,6 +159,25 @@ class ModbusResponse : public ModbusFrame {
 
 		inline uint8_t getErrorCode() const {
 			return _pdu[1];
+		}
+
+		const char* getErrorMessage() const {
+			return getErrorMessage(getErrorCode());
+		}
+
+		const char* getErrorMessage(uint8_t errorCode) const {
+			switch (errorCode) {
+			case ModbusDevice::IllegalFunction:
+				return STR_ILLEGAL_FUNCTION_ERROR;
+			case ModbusDevice::IllegalDataAddress:
+				return STR_ILLEGAL_DATA_ADDRESS_ERROR;
+			case ModbusDevice::IllegalDataValue:
+				return STR_ILLEGAL_DATA_VALUE_ERROR;
+			case ModbusDevice::ServerDeviceFailure:
+				return STR_SERVER_DEVICE_FAILURE;
+			}
+
+			return STR_UNKNOWN_RESPONSE_ERROR;
 		}
 
 		inline uint8_t getSlave() const {
