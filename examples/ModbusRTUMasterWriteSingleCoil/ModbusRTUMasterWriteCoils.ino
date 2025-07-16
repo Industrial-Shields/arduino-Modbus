@@ -20,21 +20,19 @@
 
 
 // Baudrate used by the USB serial communication
-#define USB_SERIAL_BAUDRATE                     9600
+#define USB_SERIAL_BAUDRATE                  9600
 // Baudrate used in the Modbus communication
-#define MODBUS_BAUDRATE                         38400
+#define MODBUS_BAUDRATE                      38400
 // Modbus communication duplex mode (only applicable when using RS-485)
-#define MODBUS_DUPLEX                           HALFDUPLEX
+#define MODBUS_DUPLEX                        HALFDUPLEX
 // 8 bit data, even parity, 1 stop bit
-#define MODBUS_SERIAL_CONFIG                    SERIAL_8E1
+#define MODBUS_SERIAL_CONFIG                 SERIAL_8E1
 // The Modbus address of the slave
-#define MODBUS_SLAVE_ADDRESS                    31
-// The first holding registers address to read from the slave
-#define MODBUS_HOLDING_REGISTERS_FIRST_ADDRESS  0
-// Number of holding registers to read
-#define MODBUS_HOLDING_REGISTERS_TO_READ        7
+#define MODBUS_SLAVE_ADDRESS                 31
+// The coil address to write
+#define MODBUS_COIL_TO_WRITE                 0
 // Number of milliseconds to wait between requests
-#define MS_BETWEEN_REQUESTS                     1000
+#define MS_BETWEEN_REQUESTS                  1000
 
 
 // Define the ModbusRTUMaster object, using the RS-485 or RS-232 port (depending on availability)
@@ -71,19 +69,21 @@ void setup() {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void loop() {
+  static bool coilValue = false;
   static unsigned long lastSentTime = 0UL;
 
   // Send a request every MS_BETWEEN_REQUESTS
   if (millis() - lastSentTime > MS_BETWEEN_REQUESTS) {
-    // Send a Read Holding Register request to the slave with address MODBUS_SLAVE_ADDRESS
-    // It requests for MODBUS_HOLDING_REGISTERS_TO_READ holding registers starting at address MODBUS_HOLDING_REGISTERS_FIRST_ADDRESS
+    // Send a Write Coil request to the slave with address MODBUS_SLAVE_ADDRESS
+    // It toggles the coil with address MODBUS_COIL_TO_WRITE periodically
     // IMPORTANT: all read and write functions start a Modbus transmission, but they are not
     // blocking, so you can continue the program while the Modbus functions work. To check for
     // available responses, call master.available() function often.
-    if (!master.readHoldingRegisters(MODBUS_SLAVE_ADDRESS, MODBUS_HOLDING_REGISTERS_FIRST_ADDRESS, MODBUS_HOLDING_REGISTERS_TO_READ)) {
+    if (!master.writeSingleCoil(MODBUS_SLAVE_ADDRESS, MODBUS_COIL_TO_WRITE, coilValue)) {
       // Failure treatment
     }
 
+    coilValue = !coilValue;
     lastSentTime = millis();
   }
 
@@ -94,23 +94,8 @@ void loop() {
       if (response.hasError()) {
         // Response failure treatment. You can use response.getErrorCode()
         // to get the error code.
-        Serial.print("Error ");
-        Serial.println(response.getErrorCode());
       } else {
-        // Get the discrete inputs values from the response
-        if (response.hasError()) {
-          // Response failure treatment. You can use response.getErrorCode()
-          // to get the error code.
-          Serial.print("Error ");
-          Serial.println(response.getErrorCode());
-        } else {
-          Serial.print("Holding Register values: ");
-          for (int i = 0; i < MODBUS_HOLDING_REGISTERS_TO_READ; ++i) {
-            Serial.print(response.getRegister(i));
-            Serial.print(',');
-          }
-          Serial.println();
-        }
+        // Treat the the response
       }
     }
   }
