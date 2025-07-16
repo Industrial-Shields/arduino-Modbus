@@ -148,7 +148,7 @@ ModbusResponse ModbusRTUMaster::available() {
 				} else if (_adu[0] != _currentSlave) {
 					// Bad slave error
 					setException(BadSlaveErrorException);
-				} else if (_adu[1] != _currentFC) {
+				} else if ((_adu[1] & 0x7f) != _currentFC) {
 					// Bad function code
 					setException(BadFunctionCodeException);
 				} else {
