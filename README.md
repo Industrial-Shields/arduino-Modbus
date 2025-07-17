@@ -92,6 +92,10 @@ writeSingleCoil(slave_address, address, value);
 writeSingleRegister(slave_address, address, value);
 writeMultipleCoils(slave_address, address, values, quantity);
 writeMultipleRegisters(slave_address, address, values, quantity);
+hasException();
+clearException();
+getException();
+getExceptionMessage();
 ```
 
 Where
@@ -128,6 +132,7 @@ The `ModbusResponse` implements some functions to get the response information:
 ``` c++
 hasError();
 getErrorCode();
+getErrorMessage();
 getSlave();
 getFC();
 isCoilSet(offset);
@@ -140,7 +145,9 @@ getRegister(offset);
 ModbusResponse response = master.available();
 if (response) {
 	if (response.hasError()) {
-		// There is an error. You can get the error code with response.getErrorCode()
+		// There is an error. You can also get the error code with response.getErrorCode()
+		Serial.print("The response contains an error: ");
+		Serial.println(response.getErrorMessage());
 	}
 	else {
 		// Response ready: print the read holding registers
@@ -158,6 +165,19 @@ The possible error codes are:
 0x02 ILLEGAL DATA ADDRESS
 0x03 ILLEGAL DATA VALUE
 0x04 SERVER DEVICE FAILURE
+```
+
+If an error occurs during the communication (e.g, the slave didn't respond to the request), the
+master will set an internal flag that the application maker can retrieve to determine what happened:
+
+``` c++
+if (master.hasException()) {
+	// Something happened...
+	Serial.print("An exception ocurred: ");
+	Serial.println(master.getExceptionMessage());
+	// After processing the exception, clear it from the master
+	master.clearException();
+}
 ```
 
 ### Modbus Slave
