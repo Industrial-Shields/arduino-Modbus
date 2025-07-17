@@ -32,25 +32,35 @@
 
 
 // Modbus registers mapping
-// This example uses the M-Duino 21+ mapping
+// This example is compatible with our PLCs, provided they have the first Zone.
 int digitalOutputsPins[] = {
-#if defined(PIN_Q0_4)
+#if defined(PIN_Q0_7) // It's a PLC with an analog Zone B
   Q0_0, Q0_1, Q0_2, Q0_3, Q0_4,
+#elif defined(PIN_Q0_2) // It's a PLC with a relay Zone B
+  Q0_0
+#else
+#warn "Invalid PLC detected. All Modbus data fields will be empty."
 #endif
 };
 int digitalInputsPins[] = {
-#if defined(PIN_I0_6)
+#if defined(PIN_I0_12)
   I0_0, I0_1, I0_2, I0_3, I0_4, I0_5, I0_6,
+#elif defined(PIN_I0_5)
+  I0_0, I0_1,
 #endif
 };
 int analogOutputsPins[] = {
 #if defined(PIN_Q0_7)
   A0_5, A0_6, A0_7,
+#elif defined(PIN_Q0_2)
+  A0_1, A0_2
 #endif
 };
 int analogInputsPins[] = {
 #if defined(PIN_I0_12)
   I0_7, I0_8, I0_9, I0_10, I0_11, I0_12,
+#elif defined(PIN_I0_5)
+  I0_2, I0_3, I0_4, I0_5
 #endif
 };
 
