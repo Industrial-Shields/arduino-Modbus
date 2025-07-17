@@ -31,9 +31,9 @@
 #define ETHERNET_SLAVE_PORT                     502
 // The Modbus address of the slave
 #define MODBUS_SLAVE_ADDRESS                    31
-// The discrete input address to write
+// The holding register address to write
 #define MODBUS_HOLDING_REGISTERS_FIRST_ADDRESS  0
-// Number of discrete inputs to read
+// Number of holding registers to read
 #define MODBUS_HOLDING_REGISTERS_TO_READ        5
 // Number of milliseconds to wait between requests
 #define MS_BETWEEN_REQUESTS                     1000
@@ -60,69 +60,94 @@ void setup() {
 
   // Begin Ethernet
   Ethernet.begin(masterMac, masterIp);
+  Serial.print("Local IP is: ");
   Serial.println(Ethernet.localIP());
 
   // NOTE: it is not necessary to start the modbus master object
+
+  // Wait for the Ethernet to initialize, and try the first connection
+  delay(2000);
+  Serial.println("Trying first connection...");
+  if (slaveEth.connect(slaveIp, slavePort)) {
+    Serial.println("First connection was successful");
+  }
+  else {
+    Serial.println("The first connection attempt failed. The program will try to reconnect later");
+  }
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void loop() {
-  static unsigned long lastSentTime = 0UL;
+static void tryReconnectEth(void) {
+  slaveEth.stop();
 
-  // Connect to slave if not connected
-  // The ethernet connection is managed by the application, not by the library
-  // In this case the connection is opened once
-  if (!slaveEth.connected()) {
-    slaveEth.stop();
+  if (slaveEth.connect(slaveIp, slavePort)) {
+    Serial.println("Reconnected");
+  }
+}
 
-    slaveEth.connect(slaveIp, slavePort);
-    if (slaveEth.connected()) {
-      Serial.println("Reconnected");
+static void sendModbusRequest(void) {
+  // Send a Read Holding Register request to the slave with address MODBUS_SLAVE_ADDRESS
+  // It requests for MODBUS_HOLDING_REGISTERS_TO_READ holding registers starting at address MODBUS_HOLDING_REGISTERS_FIRST_ADDRESS
+  // IMPORTANT: all read and write functions start a Modbus transmission, but they are not
+  // blocking, so you can continue the program while the Modbus functions work. To check for
+  // available responses, call master.available() function often.
+  if (!master.readHoldingRegisters(slaveEth, MODBUS_SLAVE_ADDRESS, MODBUS_HOLDING_REGISTERS_FIRST_ADDRESS, MODBUS_HOLDING_REGISTERS_TO_READ)) {
+    Serial.println("Request to read holding registers failed");
+  }
+}
+
+
+static void printExceptionIfFound(void) {
+  if (master.hasException()) {
+    // Print the exception found in the Master
+    Serial.print("Exception found in Modbus: ");
+    Serial.println(master.getExceptionMessage());
+    master.clearException();
+  }
+}
+
+static void pollModbus(void) {
+  if (master.isWaitingResponse()) {
+    ModbusResponse response = master.available();
+    // Check if there was an exception after polling
+    printExceptionIfFound();
+
+    if (response) {
+      if (!response.hasError()) {
+        // Successful response, print the results
+        Serial.print("Holding Register values: ");
+        for (uint16_t c = 0; c < (MODBUS_HOLDING_REGISTERS_TO_READ - 1); c++) {
+          Serial.print(response.getRegister(c));
+          Serial.print(", ");
+        }
+        Serial.println(response.getRegister(MODBUS_HOLDING_REGISTERS_TO_READ - 1));
+      }
+      else {
+	// Slave answered with an error, print it
+        Serial.print("The response contains an error: ");
+        Serial.println(response.getErrorMessage());
+      }
     }
   }
+}
 
-  // Send a request every MS_BETWEEN_REQUESTS if connected to slave
+void loop() {
+  // Connect to slave if not connected
+  // The Ethernet connection is managed by the application, not by the library
+  // In this case the connection is opened once
+  if (!slaveEth.connected()) {
+    tryReconnectEth();
+  }
+
   if (slaveEth.connected()) {
+    static unsigned long lastSentTime = 0UL;
     // Send a request every MS_BETWEEN_REQUESTS
-    if (millis() - lastSentTime > MS_BETWEEN_REQUESTS) {
-      // Send a Read Holding Register request to the slave with address MODBUS_SLAVE_ADDRESS
-      // It requests for MODBUS_HOLDING_REGISTERS_TO_READ holding registers starting at address MODBUS_HOLDING_REGISTERS_FIRST_ADDRESS
-      // IMPORTANT: all read and write functions start a Modbus transmission, but they are not
-      // blocking, so you can continue the program while the Modbus functions work. To check for
-      // available responses, call master.available() function often.
-      if (!master.readHoldingRegisters(slaveEth, MODBUS_SLAVE_ADDRESS, MODBUS_HOLDING_REGISTERS_FIRST_ADDRESS, MODBUS_HOLDING_REGISTERS_TO_READ)) {
-        // Failure treatment
-      }
-
+    if (millis() - lastSentTime > MS_BETWEEN_REQUESTS && !master.isWaitingResponse()) {
+      sendModbusRequest();
       lastSentTime = millis();
     }
 
-    // Check available responses often
-    if (master.isWaitingResponse()) {
-      ModbusResponse response = master.available();
-      if (response) {
-        if (response.hasError()) {
-          // Response failure treatment. You can use response.getErrorCode()
-          // to get the error code.
-          Serial.print("Error ");
-          Serial.println(response.getErrorCode());
-        } else {
-          // Get the discrete inputs values from the response
-          if (response.hasError()) {
-            // Response failure treatment. You can use response.getErrorCode()
-            // to get the error code.
-            Serial.print("Error ");
-            Serial.println(response.getErrorCode());
-          } else {
-            Serial.print("Holding Register values: ");
-            for (int i = 0; i < MODBUS_HOLDING_REGISTERS_TO_READ; ++i) {
-              Serial.print(response.getRegister(i));
-              Serial.print(',');
-            }
-            Serial.println();
-          }
-        }
-      }
-    }
+    pollModbus();
   }
 }

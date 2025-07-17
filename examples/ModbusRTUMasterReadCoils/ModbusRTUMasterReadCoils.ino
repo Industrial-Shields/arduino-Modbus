@@ -69,42 +69,61 @@ void setup() {
   master.begin(MODBUS_BAUDRATE);
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-void loop() {
-  static unsigned long lastSentTime = 0UL;
 
-  // Send a request every MS_BETWEEN_REQUESTS
-  if (millis() - lastSentTime > MS_BETWEEN_REQUESTS) {
+////////////////////////////////////////////////////////////////////////////////////////////////////
+static void sendModbusRequest(void) {
     // Send a Read Coils request to the slave with address MODBUS_SLAVE_ADDRESS
     // It requests for MODBUS_COILS_TO_READ coils starting at address MODBUS_COILS_FIRST_ADDRESS
     // IMPORTANT: all read and write functions start a Modbus transmission, but they are not
     // blocking, so you can continue the program while the Modbus functions work. To check for
     // available responses, call master.available() function often.
     if (!master.readCoils(MODBUS_SLAVE_ADDRESS, MODBUS_COILS_FIRST_ADDRESS, MODBUS_COILS_TO_READ)) {
-      // Failure treatment
+      Serial.println("Request to read coils failed");
     }
+}
 
-    lastSentTime = millis();
+
+static void printExceptionIfFound(void) {
+  if (master.hasException()) {
+    // Print the exception found in the Master
+    Serial.print("Exception found in Modbus: ");
+    Serial.println(master.getExceptionMessage());
+    master.clearException();
   }
+}
 
-  // Check available responses often
+static void pollModbus(void) {
   if (master.isWaitingResponse()) {
     ModbusResponse response = master.available();
-    if (response) {
-      if (response.hasError()) {
-        // Response failure treatment. You can use response.getErrorCode()
-        // to get the error code.
-      } else {
-        // Get the coil value from the response
-        for (byte i = 0; i < MODBUS_COILS_TO_READ; i++) {
-          bool coil = response.isCoilSet(i);
+    // Check if there was an exception after polling
+    printExceptionIfFound();
 
-          Serial.print("Coil ");
-          Serial.print(i);
-          Serial.print(": ");
-          Serial.println(coil);
+    if (response) {
+      if (!response.hasError()) {
+        // Successful response, print the results
+        Serial.print("Coil values: ");
+        for (uint16_t c = 0; c < (MODBUS_COILS_TO_READ - 1); c++) {
+          Serial.print(response.isCoilSet(c));
+          Serial.print(", ");
         }
+        Serial.println(response.isCoilSet(MODBUS_COILS_TO_READ - 1));
+      }
+      else {
+	// Slave answered with an error, print it
+        Serial.print("The response contains an error: ");
+        Serial.println(response.getErrorMessage());
       }
     }
   }
+}
+
+void loop() {
+  static unsigned long lastSentTime = 0UL;
+  // Send a request every MS_BETWEEN_REQUESTS
+  if (millis() - lastSentTime > MS_BETWEEN_REQUESTS && !master.isWaitingResponse()) {
+    sendModbusRequest();
+    lastSentTime = millis();
+  }
+
+  pollModbus();
 }

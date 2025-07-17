@@ -29,9 +29,9 @@
 #define MODBUS_SERIAL_CONFIG                    SERIAL_8E1
 // The Modbus address of the slave
 #define MODBUS_SLAVE_ADDRESS                    31
-// The coil address to write
+// The holding register address to write
 #define MODBUS_FIRST_HOLDING_REGISTER_TO_WRITE  0
-// Number of coils to read
+// Number of holding registers to write
 #define MODBUS_HOLDING_REGISTERS_TO_WRITE       3
 // Number of milliseconds to wait between requests
 #define MS_BETWEEN_REQUESTS                     1000
@@ -70,37 +70,63 @@ void setup() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void loop() {
-  static uint16_t holdingRegisterValues[MODBUS_HOLDING_REGISTERS_TO_WRITE];
-  static unsigned long lastSentTime = 0UL;
+static void sendModbusRequest(void) {
+  static uint16_t registerValues[MODBUS_HOLDING_REGISTERS_TO_WRITE];
 
-  // Send a request every MS_BETWEEN_REQUESTS
-  if (millis() - lastSentTime > MS_BETWEEN_REQUESTS) {
-    // Send a Write Multiple HoldingRegisters request to the slave with address MODBUS_SLAVE_ADDRESS
-    // It requests for setting MODBUS_HOLDING_REGISTERS_TO_WRITE holdingRegisters starting in address MODBUS_FIRST_HOLDING_REGISTER_TO_WRITE
-    // IMPORTANT: all read and write functions start a Modbus transmission, but they are not
-    // blocking, so you can continue the program while the Modbus functions work. To check for
-    // available responses, call modbus.available() function often.
-    if (!master.writeMultipleRegisters(MODBUS_SLAVE_ADDRESS, MODBUS_FIRST_HOLDING_REGISTER_TO_WRITE, holdingRegisterValues, MODBUS_HOLDING_REGISTERS_TO_WRITE)) {
-      // Failure treatment
-    }
-
+  // Send a Write Multiple Holding Registers request to the slave with address MODBUS_SLAVE_ADDRESS
+  // It requests for setting MODBUS_HOLDING_REGISTERS_TO_WRITE registers starting in address MODBUS_FIRST_HOLDING_REGISTER_TO_WRITE
+  // IMPORTANT: all read and write functions start a Modbus transmission, but they are not
+  // blocking, so you can continue the program while the Modbus functions work. To check for
+  // available responses, call modbus.available() function often.
+  if (master.writeMultipleRegisters(MODBUS_SLAVE_ADDRESS, MODBUS_FIRST_HOLDING_REGISTER_TO_WRITE, registerValues, MODBUS_HOLDING_REGISTERS_TO_WRITE)) {
+    // Flip the register values
     for (uint16_t c = 0; c < MODBUS_HOLDING_REGISTERS_TO_WRITE; c++) {
-      holdingRegisterValues[c] = holdingRegisterValues[c] == 0 ? 1000 : 0;
+      registerValues[c] = registerValues[c] == 0 ? 1000 : 0;
     }
-    lastSentTime = millis();
   }
+  else {
+    // For some reason, the request could not be completed.
+    Serial.println("Request to write holding registers failed");
+  }
+}
 
-  // Check available responses often
+
+static void printExceptionIfFound(void) {
+  if (master.hasException()) {
+    // Print the exception found in the Master
+    Serial.print("Exception found in Modbus: ");
+    Serial.println(master.getExceptionMessage());
+    master.clearException();
+  }
+}
+
+static void pollModbus(void) {
   if (master.isWaitingResponse()) {
     ModbusResponse response = master.available();
+    // Check if there was an exception after polling
+    printExceptionIfFound();
+
     if (response) {
-      if (response.hasError()) {
-        // Response failure treatment. You can use response.getErrorCode()
-        // to get the error code.
-      } else {
-        // Treat the the response
+      if (!response.hasError()) {
+        // Successful response
+        Serial.println("The slave successfully processed the request");
+      }
+      else {
+	// Slave answered with an error, print it
+        Serial.print("The response contains an error: ");
+        Serial.println(response.getErrorMessage());
       }
     }
   }
+}
+
+void loop() {
+  static unsigned long lastSentTime = 0UL;
+  // Send a request every MS_BETWEEN_REQUESTS
+  if (millis() - lastSentTime > MS_BETWEEN_REQUESTS && !master.isWaitingResponse()) {
+    sendModbusRequest();
+    lastSentTime = millis();
+  }
+
+  pollModbus();
 }

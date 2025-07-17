@@ -32,8 +32,8 @@
 #define ETHERNET_SLAVE_PORT                     502
 // The Modbus address of the slave
 #define MODBUS_SLAVE_ADDRESS                    31
-// The coil address to write
-#define MODBUS_COIL_TO_WRITE                    0
+// The holding register address to write
+#define MODBUS_HOLDING_REGISTER_TO_WRITE        0
 // Number of milliseconds to wait between requests
 #define MS_BETWEEN_REQUESTS                     1000
 
@@ -59,56 +59,94 @@ void setup() {
 
   // Begin Ethernet
   Ethernet.begin(masterMac, masterIp);
+  Serial.print("Local IP is: ");
   Serial.println(Ethernet.localIP());
 
   // NOTE: it is not necessary to start the modbus master object
+
+  // Wait for the Ethernet to initialize, and try the first connection
+  delay(2000);
+  Serial.println("Trying first connection...");
+  if (slaveEth.connect(slaveIp, slavePort)) {
+    Serial.println("First connection was successful");
+  }
+  else {
+    Serial.println("The first connection attempt failed. The program will try to reconnect later");
+  }
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void loop() {
-  static bool coilValue;
-  static unsigned long lastSentTime = 0UL;
+static void tryReconnectEth(void) {
+  slaveEth.stop();
 
-  // Connect to slave if not connected
-  // The ethernet connection is managed by the application, not by the library
-  // In this case the connection is opened once
-  if (!slaveEth.connected()) {
-    slaveEth.stop();
+  if (slaveEth.connect(slaveIp, slavePort)) {
+    Serial.println("Reconnected");
+  }
+}
 
-    slaveEth.connect(slaveIp, slavePort);
-    if (slaveEth.connected()) {
-      Serial.println("Reconnected");
+static void sendModbusRequest(void) {
+  static uint16_t registerValue;
+
+  // Send a Write Holding Register request to the slave with address MODBUS_SLAVE_ADDRESS
+  // It toggles the holding register with address MODBUS_HOLDING_REGISTER_TO_WRITE periodically
+  // IMPORTANT: all read and write functions start a Modbus transmission, but they are not
+  // blocking, so you can continue the program while the Modbus functions work. To check for
+  // available responses, call modbus.available() function often.
+  if (master.writeSingleRegister(slaveEth, MODBUS_SLAVE_ADDRESS, MODBUS_HOLDING_REGISTER_TO_WRITE, registerValue)) {
+    registerValue = registerValue == 0 ? 1000 : 0;
+  }
+  else {
+    // For some reason, the request could not be completed.
+    Serial.println("Request to write holding registers failed");
+  }
+}
+
+static void printExceptionIfFound(void) {
+  if (master.hasException()) {
+    // Print the exception found in the Master
+    Serial.print("Exception found in Modbus: ");
+    Serial.println(master.getExceptionMessage());
+    master.clearException();
+  }
+}
+
+static void pollModbus(void) {
+  if (master.isWaitingResponse()) {
+    ModbusResponse response = master.available();
+    // Check if there was an exception after polling
+    printExceptionIfFound();
+
+    if (response) {
+      if (!response.hasError()) {
+        // Successful response
+        Serial.println("The slave successfully processed the request");
+      }
+      else {
+	// Slave answered with an error, print it
+        Serial.print("The response contains an error: ");
+        Serial.println(response.getErrorMessage());
+      }
     }
   }
+}
 
-  // Send a request every MS_BETWEEN_REQUESTS if connected to slave
+void loop() {
+  // Connect to slave if not connected
+  // The Ethernet connection is managed by the application, not by the library
+  // In this case the connection is opened once
+  if (!slaveEth.connected()) {
+    tryReconnectEth();
+  }
+
   if (slaveEth.connected()) {
+    static unsigned long lastSentTime = 0UL;
     // Send a request every MS_BETWEEN_REQUESTS
-    if (millis() - lastSentTime > MS_BETWEEN_REQUESTS) {
-      // Send a Write Multiple Coils request to the slave with address MODBUS_SLAVE_ADDRESS
-      // It requests for setting MODBUS_COILS_TO_WRITE coils starting in address MODBUS_FIRST_COIL_TO_WRITE
-      // IMPORTANT: all read and write functions start a Modbus transmission, but they are not
-      // blocking, so you can continue the program while the Modbus functions work. To check for
-      // available responses, call modbus.available() function often.
-      if (!master.writeSingleCoil(slaveEth, MODBUS_SLAVE_ADDRESS, MODBUS_COIL_TO_WRITE, coilValue)) {
-        // Failure treatment
-      }
-
-      coilValue = !coilValue;
+    if (millis() - lastSentTime > MS_BETWEEN_REQUESTS && !master.isWaitingResponse()) {
+      sendModbusRequest();
       lastSentTime = millis();
     }
 
-    // Check available responses often
-    if (master.isWaitingResponse()) {
-      ModbusResponse response = master.available();
-      if (response) {
-        if (response.hasError()) {
-          // Response failure treatment. You can use response.getErrorCode()
-          // to get the error code.
-        } else {
-          // Treat the the response
-        }
-      }
-    }
+    pollModbus();
   }
 }

@@ -70,37 +70,63 @@ void setup() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void loop() {
+static void sendModbusRequest(void) {
   static bool coilValues[MODBUS_COILS_TO_WRITE];
-  static unsigned long lastSentTime = 0UL;
 
-  // Send a request every MS_BETWEEN_REQUESTS
-  if (millis() - lastSentTime > MS_BETWEEN_REQUESTS) {
-    // Send a Write Multiple Coils request to the slave with address MODBUS_SLAVE_ADDRESS
-    // It requests for setting MODBUS_COILS_TO_WRITE coils starting in address MODBUS_FIRST_COIL_TO_WRITE
-    // IMPORTANT: all read and write functions start a Modbus transmission, but they are not
-    // blocking, so you can continue the program while the Modbus functions work. To check for
-    // available responses, call modbus.available() function often.
-    if (!master.writeMultipleCoils(MODBUS_SLAVE_ADDRESS, MODBUS_FIRST_COIL_TO_WRITE, coilValues, MODBUS_COILS_TO_WRITE)) {
-      // Failure treatment
-    }
-
+  // Send a Write Multiple Coils request to the slave with address MODBUS_SLAVE_ADDRESS
+  // It requests for setting MODBUS_COILS_TO_WRITE coils starting in address MODBUS_FIRST_COIL_TO_WRITE
+  // IMPORTANT: all read and write functions start a Modbus transmission, but they are not
+  // blocking, so you can continue the program while the Modbus functions work. To check for
+  // available responses, call modbus.available() function often.
+  if (master.writeMultipleCoils(MODBUS_SLAVE_ADDRESS, MODBUS_FIRST_COIL_TO_WRITE, coilValues, MODBUS_COILS_TO_WRITE)) {
+    // Flip the coil values
     for (uint16_t c = 0; c < MODBUS_COILS_TO_WRITE; c++) {
       coilValues[c] = !coilValues[c];
     }
-    lastSentTime = millis();
   }
+  else {
+    // For some reason, the request could not be completed.
+    Serial.println("Request to write coils failed");
+  }
+}
 
-  // Check available responses often
+
+static void printExceptionIfFound(void) {
+  if (master.hasException()) {
+    // Print the exception found in the Master
+    Serial.print("Exception found in Modbus: ");
+    Serial.println(master.getExceptionMessage());
+    master.clearException();
+  }
+}
+
+static void pollModbus(void) {
   if (master.isWaitingResponse()) {
     ModbusResponse response = master.available();
+    // Check if there was an exception after polling
+    printExceptionIfFound();
+
     if (response) {
-      if (response.hasError()) {
-        // Response failure treatment. You can use response.getErrorCode()
-        // to get the error code.
-      } else {
-        // Treat the the response
+      if (!response.hasError()) {
+        // Successful response
+        Serial.println("The slave successfully processed the request");
+      }
+      else {
+	// Slave answered with an error, print it
+        Serial.print("The response contains an error: ");
+        Serial.println(response.getErrorMessage());
       }
     }
   }
+}
+
+void loop() {
+  static unsigned long lastSentTime = 0UL;
+  // Send a request every MS_BETWEEN_REQUESTS
+  if (millis() - lastSentTime > MS_BETWEEN_REQUESTS && !master.isWaitingResponse()) {
+    sendModbusRequest();
+    lastSentTime = millis();
+  }
+
+  pollModbus();
 }

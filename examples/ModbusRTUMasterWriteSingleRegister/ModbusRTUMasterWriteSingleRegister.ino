@@ -68,35 +68,61 @@ void setup() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void loop() {
-  static uint16_t registerValue = 0;
-  static unsigned long lastSentTime = 0UL;
+static void sendModbusRequest(void) {
+  static uint16_t registerValue;
 
-  // Send a request every MS_BETWEEN_REQUESTS
-  if (millis() - lastSentTime > MS_BETWEEN_REQUESTS) {
-    // Send a Write Holding Register request to the slave with address MODBUS_SLAVE_ADDRESS
-    // It toggles the holding register with address MODBUS_HOLDING_REGISTER_TO_WRITE periodically
-    // IMPORTANT: all read and write functions start a Modbus transmission, but they are not
-    // blocking, so you can continue the program while the Modbus functions work. To check for
-    // available responses, call master.available() function often.
-    if (!master.writeSingleRegister(MODBUS_SLAVE_ADDRESS, MODBUS_HOLDING_REGISTER_TO_WRITE, registerValue)) {
-      // Failure treatment
-    }
-
+  // Send a Write Holding Register request to the slave with address MODBUS_SLAVE_ADDRESS
+  // It toggles the holding register with address MODBUS_HOLDING_REGISTER_TO_WRITE periodically
+  // IMPORTANT: all read and write functions start a Modbus transmission, but they are not
+  // blocking, so you can continue the program while the Modbus functions work. To check for
+  // available responses, call modbus.available() function often.
+  if (master.writeSingleRegister(MODBUS_SLAVE_ADDRESS, MODBUS_HOLDING_REGISTER_TO_WRITE, registerValue)) {
+    // Flip the register values
     registerValue = registerValue == 0 ? 1000 : 0;
-    lastSentTime = millis();
   }
+  else {
+    // For some reason, the request could not be completed.
+    Serial.println("Request to write a holding register failed");
+  }
+}
 
-  // Check available responses often
+
+static void printExceptionIfFound(void) {
+  if (master.hasException()) {
+    // Print the exception found in the Master
+    Serial.print("Exception found in Modbus: ");
+    Serial.println(master.getExceptionMessage());
+    master.clearException();
+  }
+}
+
+static void pollModbus(void) {
   if (master.isWaitingResponse()) {
     ModbusResponse response = master.available();
+    // Check if there was an exception after polling
+    printExceptionIfFound();
+
     if (response) {
-      if (response.hasError()) {
-        // Response failure treatment. You can use response.getErrorCode()
-        // to get the error code.
-      } else {
-        // Treat the the response
+      if (!response.hasError()) {
+        // Successful response
+        Serial.println("The slave successfully processed the request");
+      }
+      else {
+	// Slave answered with an error, print it
+        Serial.print("The response contains an error: ");
+        Serial.println(response.getErrorMessage());
       }
     }
   }
+}
+
+void loop() {
+  static unsigned long lastSentTime = 0UL;
+  // Send a request every MS_BETWEEN_REQUESTS
+  if (millis() - lastSentTime > MS_BETWEEN_REQUESTS && !master.isWaitingResponse()) {
+    sendModbusRequest();
+    lastSentTime = millis();
+  }
+
+  pollModbus();
 }

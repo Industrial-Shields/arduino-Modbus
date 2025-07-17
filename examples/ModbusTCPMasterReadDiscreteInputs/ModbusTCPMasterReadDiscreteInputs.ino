@@ -60,62 +60,94 @@ void setup() {
 
   // Begin Ethernet
   Ethernet.begin(masterMac, masterIp);
+  Serial.print("Local IP is: ");
   Serial.println(Ethernet.localIP());
 
   // NOTE: it is not necessary to start the modbus master object
+
+  // Wait for the Ethernet to initialize, and try the first connection
+  delay(2000);
+  Serial.println("Trying first connection...");
+  if (slaveEth.connect(slaveIp, slavePort)) {
+    Serial.println("First connection was successful");
+  }
+  else {
+    Serial.println("The first connection attempt failed. The program will try to reconnect later");
+  }
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void loop() {
-  static unsigned long lastSentTime = 0UL;
+static void tryReconnectEth(void) {
+  slaveEth.stop();
 
-  // Connect to slave if not connected
-  // The ethernet connection is managed by the application, not by the library
-  // In this case the connection is opened once
-  if (!slaveEth.connected()) {
-    slaveEth.stop();
+  if (slaveEth.connect(slaveIp, slavePort)) {
+    Serial.println("Reconnected");
+  }
+}
 
-    slaveEth.connect(slaveIp, slavePort);
-    if (slaveEth.connected()) {
-      Serial.println("Reconnected");
+static void sendModbusRequest(void) {
+  // Send a Read Discrete Input request to the slave with address MODBUS_SLAVE_ADDRESS
+  // It requests for MODBUS_DISCRETE_INPUTS_TO_READ discrete inputs starting at address MODBUS_DISCRETE_INPUTS_FIRST_ADDRESS
+  // IMPORTANT: all read and write functions start a Modbus transmission, but they are not
+  // blocking, so you can continue the program while the Modbus functions work. To check for
+  // available responses, call master.available() function often.
+  if (!master.readDiscreteInputs(slaveEth, MODBUS_SLAVE_ADDRESS, MODBUS_DISCRETE_INPUTS_FIRST_ADDRESS, MODBUS_DISCRETE_INPUTS_TO_READ)) {
+    Serial.println("Request to read discrete inputs failed");
+  }
+}
+
+
+static void printExceptionIfFound(void) {
+  if (master.hasException()) {
+    // Print the exception found in the Master
+    Serial.print("Exception found in Modbus: ");
+    Serial.println(master.getExceptionMessage());
+    master.clearException();
+  }
+}
+
+static void pollModbus(void) {
+  if (master.isWaitingResponse()) {
+    ModbusResponse response = master.available();
+    // Check if there was an exception after polling
+    printExceptionIfFound();
+
+    if (response) {
+      if (!response.hasError()) {
+        // Successful response, print the results
+        Serial.print("Discrete Input values: ");
+        for (uint16_t c = 0; c < (MODBUS_DISCRETE_INPUTS_TO_READ - 1); c++) {
+          Serial.print(response.isDiscreteInputSet(c));
+          Serial.print(", ");
+        }
+        Serial.println(response.isDiscreteInputSet(MODBUS_DISCRETE_INPUTS_TO_READ - 1));
+      }
+      else {
+	// Slave answered with an error, print it
+        Serial.print("The response contains an error: ");
+        Serial.println(response.getErrorMessage());
+      }
     }
   }
+}
 
-  // Send a request every MS_BETWEEN_REQUESTS if connected to slave
+void loop() {
+  // Connect to slave if not connected
+  // The Ethernet connection is managed by the application, not by the library
+  // In this case the connection is opened once
+  if (!slaveEth.connected()) {
+    tryReconnectEth();
+  }
+
   if (slaveEth.connected()) {
+    static unsigned long lastSentTime = 0UL;
     // Send a request every MS_BETWEEN_REQUESTS
-    if (millis() - lastSentTime > MS_BETWEEN_REQUESTS) {
-      // Send a Read Discrete Inputs request to the slave with address MODBUS_SLAVE_ADDRESS
-      // It requests for MODBUS_DISCRETE_INPUTS_TO_READ discrete inputs starting at address MODBUS_DISCRETE_INPUTS_FIRST_ADDRESS
-      // IMPORTANT: all read and write functions start a Modbus transmission, but they are not
-      // blocking, so you can continue the program while the Modbus functions work. To check for
-      // available responses, call master.available() function often.
-      if (!master.readDiscreteInput(slaveEth, MODBUS_SLAVE_ADDRESS, MODBUS_DISCRETE_INPUTS_FIRST_ADDRESS, MODBUS_DISCRETE_INPUTS_TO_READ)) {
-        // Failure treatment
-      }
-
+    if (millis() - lastSentTime > MS_BETWEEN_REQUESTS && !master.isWaitingResponse()) {
+      sendModbusRequest();
       lastSentTime = millis();
     }
 
-    // Check available responses often
-    if (master.isWaitingResponse()) {
-      ModbusResponse response = master.available();
-      if (response) {
-        if (response.hasError()) {
-          // Response failure treatment. You can use response.getErrorCode()
-          // to get the error code.
-        } else {
-          // Get the discrete input value from the response
-          for (byte i = 0; i < MODBUS_DISCRETE_INPUTS_TO_READ; i++) {
-            bool discreteInput = response.isDiscreteInputSet(i);
-
-            Serial.print("Discrete input ");
-            Serial.print(i);
-            Serial.print(": ");
-            Serial.println(discreteInput);
-          }
-        }
-      }
-    }
+    pollModbus();
   }
 }
