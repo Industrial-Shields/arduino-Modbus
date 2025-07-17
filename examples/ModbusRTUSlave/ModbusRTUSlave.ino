@@ -1,21 +1,35 @@
 /*
-   Copyright (c) 2018 Boot&Work Corp., S.L. All rights reserved
-
-   This program is free software: you can redistribute it and/or modify
-   it under the terms of the GNU Lesser General Public License as published by
-   the Free Software Foundation, either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU Lesser General Public License for more details.
-
-   You should have received a copy of the GNU Lesser General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2025 Industrial Shields. All rights reserved
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ModbusRTUSlave.h>
+
+
+
+// Baudrate used by the USB serial communication
+#define USB_SERIAL_BAUDRATE            9600
+// Baudrate used in the Modbus communication
+#define MODBUS_BAUDRATE                38400
+// Modbus communication duplex mode (only applicable when using RS-485)
+#define MODBUS_DUPLEX                  HALFDUPLEX
+// 8 bit data, even parity, 1 stop bit
+#define MODBUS_SERIAL_CONFIG           SERIAL_8E1
+// The Modbus address of the slave
+#define MODBUS_ADDRESS                 31
+
 
 // Modbus registers mapping
 // This example uses the M-Duino 21+ mapping
@@ -40,35 +54,38 @@ int analogInputsPins[] = {
 #endif
 };
 
-#define numDigitalOutputs int(sizeof(digitalOutputsPins) / sizeof(int))
-#define numDigitalInputs int(sizeof(digitalInputsPins) / sizeof(int))
-#define numAnalogOutputs int(sizeof(analogOutputsPins) / sizeof(int))
-#define numAnalogInputs int(sizeof(analogInputsPins) / sizeof(int))
+
+#define numDigitalOutputs (sizeof(digitalOutputsPins) / sizeof(int))
+#define numDigitalInputs (sizeof(digitalInputsPins) / sizeof(int))
+#define numAnalogOutputs (sizeof(analogOutputsPins) / sizeof(int))
+#define numAnalogInputs (sizeof(analogInputsPins) / sizeof(int))
 
 bool digitalOutputs[numDigitalOutputs];
 bool digitalInputs[numDigitalInputs];
 uint16_t analogOutputs[numAnalogOutputs];
 uint16_t analogInputs[numAnalogInputs];
 
-// Define the ModbusRTUSlave object with Modbus RTU slave address: 31,
+
+
+// Define the ModbusRTUSlave object with the Modbus RTU slave address,
 // using the RS-485, RS-232 or Serial1 port, depending on availability
 #if defined HAVE_RS485_HARD
 #include <RS485.h>
-ModbusRTUSlave modbus(RS485, 31);
+ModbusRTUSlave modbus(RS485, MODBUS_ADDRESS);
 
 #elif defined HAVE_RS232_HARD
 #include <RS232.h>
-ModbusRTUSlave modbus(RS232, 31);
+ModbusRTUSlave modbus(RS232, MODBUS_ADDRESS);
 
 #else
-ModbusRTUSlave modbus(Serial1, 31);
+ModbusRTUSlave modbus(Serial1, MODBUS_ADDRESS);
 #endif
 
-const uint32_t baudrate = 38400UL;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void setup() {
-  Serial.begin(9600UL);
+  Serial.begin(USB_SERIAL_BAUDRATE);
 
   // Init variables, inputs and outputs
   for (int i = 0; i < numDigitalOutputs; ++i) {
@@ -88,20 +105,20 @@ void setup() {
 
   // Start the serial port
 #if defined HAVE_RS485_HARD
-  RS485.begin(baudrate, HALFDUPLEX, SERIAL_8E1);
+  RS485.begin(MODBUS_BAUDRATE, MODBUS_DUPLEX, MODBUS_SERIAL_CONFIG);
 #elif defined HAVE_RS232_HARD
-  RS232.begin(baudrate, SERIAL_8E1);
+  RS232.begin(MODBUS_BAUDRATE, MODBUS_SERIAL_CONFIG);
 #else
-  Serial1.begin(baudrate, SERIAL_8E1);
+  Serial1.begin(MODBUS_BAUDRATE, MODBUS_SERIAL_CONFIG);
 #endif
 
   // Init ModbusRTUSlave object
-  modbus.begin(baudrate);
-
   modbus.setCoils(digitalOutputs, numDigitalOutputs);
   modbus.setDiscreteInputs(digitalInputs, numDigitalInputs);
   modbus.setHoldingRegisters(analogOutputs, numAnalogOutputs);
   modbus.setInputRegisters(analogInputs, numAnalogInputs);
+
+  modbus.begin(MODBUS_BAUDRATE);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,27 +1,36 @@
 /*
-   Copyright (c) 2018 Boot&Work Corp., S.L. All rights reserved
-
-   This program is free software: you can redistribute it and/or modify
-   it under the terms of the GNU Lesser General Public License as published by
-   the Free Software Foundation, either version 3 of the License, or
-   (at your option) any later version.
-
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU Lesser General Public License for more details.
-
-   You should have received a copy of the GNU Lesser General Public License
-   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (c) 2025 Industrial Shields. All rights reserved
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <Ethernet.h>
 #include <ModbusTCPSlave.h>
 
-// Ethernet configuration values
-uint8_t mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xEE };
-IPAddress ip(10, 10, 10, 4);
-const uint16_t port = 502;
+
+
+// Baudrate used by the USB serial communication
+#define USB_SERIAL_BAUDRATE               9600
+// Ethernet's MAC
+#define ETHERNET_MAC                      { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xEE }
+// Modbus slave IP
+#define ETHERNET_IP                       IPAddress(10, 10, 10, 4);
+// Modbus slave port
+#define ETHERNET_PORT                     502
+// The Modbus address of the slave
+#define MODBUS_ADDRESS                    31
+
 
 // Modbus registers mapping
 // This example uses the M-Duino21+ mapping
@@ -46,22 +55,30 @@ int analogInputsPins[] = {
 #endif
 };
 
-#define numDigitalOutputs int(sizeof(digitalOutputsPins) / sizeof(int))
-#define numDigitalInputs int(sizeof(digitalInputsPins) / sizeof(int))
-#define numAnalogOutputs int(sizeof(analogOutputsPins) / sizeof(int))
-#define numAnalogInputs int(sizeof(analogInputsPins) / sizeof(int))
+
+// Ethernet configuration values
+static uint8_t mac[6] = ETHERNET_MAC;
+static IPAddress ip = ETHERNET_IP;
+static uint16_t port = ETHERNET_PORT;
+
+
+#define numDigitalOutputs (sizeof(digitalOutputsPins) / sizeof(int))
+#define numDigitalInputs (sizeof(digitalInputsPins) / sizeof(int))
+#define numAnalogOutputs (sizeof(analogOutputsPins) / sizeof(int))
+#define numAnalogInputs (sizeof(analogInputsPins) / sizeof(int))
 
 bool digitalOutputs[numDigitalOutputs];
 bool digitalInputs[numDigitalInputs];
 uint16_t analogOutputs[numAnalogOutputs];
 uint16_t analogInputs[numAnalogInputs];
 
+
 // Define the ModbusTCPSlave object
 ModbusTCPSlave modbus(port);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void setup() {
-  Serial.begin(9600UL);
+  Serial.begin(USB_SERIAL_BAUDRATE);
 
   // Init variables, inputs and outputs
   for (int i = 0; i < numDigitalOutputs; ++i) {
@@ -81,15 +98,16 @@ void setup() {
 
   // Init Ethernet
   Ethernet.begin(mac, ip);
+  Serial.print("Local IP is: ");
   Serial.println(Ethernet.localIP());
 
   // Init ModbusTCPSlave object
-  modbus.begin();
-
   modbus.setCoils(digitalOutputs, numDigitalOutputs);
   modbus.setDiscreteInputs(digitalInputs, numDigitalInputs);
   modbus.setHoldingRegisters(analogOutputs, numAnalogOutputs);
   modbus.setInputRegisters(analogInputs, numAnalogInputs);
+
+  modbus.begin();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
